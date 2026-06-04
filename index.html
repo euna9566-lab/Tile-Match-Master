@@ -1,0 +1,1911 @@
+
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>타일 매치 마스터 - 하드코어 퍼즐</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts (Inter) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0b0f19;
+            user-select: none;
+            -webkit-user-select: none;
+            overflow-x: hidden;
+        }
+        /* Custom neon scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3b82f6;
+            border-radius: 3px;
+        }
+        /* Shake effect for combos and penalties */
+        .shake {
+            animation: shake 0.3s cubic-bezier(.36,.07,.19,.97) both;
+            transform: translate3d(0, 0, 0);
+        }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-2px, 0, 0); }
+            20%, 80% { transform: translate3d(3px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-5px, 0, 0); }
+            40%, 60% { transform: translate3d(5px, 0, 0); }
+        }
+        /* Fever pulse overlay */
+        .fever-glow {
+            animation: feverGlow 1.5s infinite alternate;
+        }
+        @keyframes feverGlow {
+            0% { box-shadow: inset 0 0 15px #f43f5e; }
+            100% { box-shadow: inset 0 0 35px #fbbf24; }
+        }
+        /* Golden Tile rotation */
+        .gold-shimmer {
+            animation: shimmer 2s infinite linear;
+            background: linear-gradient(135deg, #fbbf24 0%, #d97706 50%, #fbbf24 100%);
+            background-size: 200% auto;
+        }
+        @keyframes shimmer {
+            0% { background-position: 0% center; }
+            100% { background-position: 200% center; }
+        }
+    </style>
+</head>
+<body class="text-white min-h-screen flex flex-col items-center justify-between p-2 md:p-4">
+
+    <div id="app" class="w-full max-w-md md:max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden relative flex flex-col h-[94vh] md:h-[90vh]">
+        
+        <!-- FEVER TIME OVERLAY -->
+        <div id="fever-screen" class="hidden absolute inset-0 pointer-events-none border-4 border-rose-500 rounded-3xl fever-glow z-10">
+            <div class="absolute top-2 left-1/2 -translate-x-1/2 bg-gradient-to-r from-rose-500 to-amber-500 px-4 py-1 rounded-full text-xs font-black tracking-widest text-white animate-bounce shadow-lg">
+                🔥 FEVER TIME 🔥
+            </div>
+        </div>
+
+        <!-- MAIN MENU / LOBBY -->
+        <div id="lobby-screen" class="absolute inset-0 bg-slate-950 z-20 flex flex-col p-4 md:p-6 overflow-y-auto">
+            <div class="text-center my-6">
+                <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-600 animate-pulse">
+                    TILE MATCH
+                </h1>
+                <p class="text-xs text-slate-400 tracking-widest uppercase mt-1">Ultimate Puzzle Adventure</p>
+            </div>
+
+            <!-- Audio Controller in Lobby -->
+            <div class="flex justify-end mb-4">
+                <button onclick="toggleMute()" id="lobby-mute-btn" class="bg-slate-900/80 hover:bg-slate-800 border border-slate-800 px-4 py-2 rounded-xl text-xs font-bold text-slate-300 flex items-center gap-2 transition">
+                    <i class="fa-solid fa-volume-high text-emerald-400" id="lobby-mute-icon"></i> <span id="lobby-mute-text">소리 켬</span>
+                </button>
+            </div>
+
+            <!-- Stats Overview -->
+            <div class="grid grid-cols-2 gap-3 mb-6">
+                <div class="bg-slate-900/80 p-3 rounded-2xl border border-slate-800 text-center">
+                    <span class="text-xs text-slate-400 block">최고 점수</span>
+                    <span id="lobby-highscore" class="text-xl font-bold text-amber-400">0</span>
+                </div>
+                <div class="bg-slate-900/80 p-3 rounded-2xl border border-slate-800 text-center">
+                    <span class="text-xs text-slate-400 block">보유 골드</span>
+                    <span id="lobby-gold" class="text-xl font-bold text-yellow-300">🪙 0</span>
+                </div>
+            </div>
+
+            <!-- Lobby Tabs -->
+            <div class="flex border-b border-slate-800 mb-4 text-sm font-semibold">
+                <button onclick="switchTab('upgrades')" id="tab-btn-upgrades" class="flex-1 pb-2 border-b-2 border-blue-500 text-blue-400 transition">업그레이드</button>
+                <button onclick="switchTab('missions')" id="tab-btn-missions" class="flex-1 pb-2 border-b-2 border-transparent text-slate-400 transition">일일 미션 & 업적</button>
+                <button onclick="switchTab('skins')" id="tab-btn-skins" class="flex-1 pb-2 border-b-2 border-transparent text-slate-400 transition">스킨 상점</button>
+            </div>
+
+            <!-- Tab Contents -->
+            <div class="flex-1 overflow-y-auto pr-1 mb-4" style="max-height: 40vh;">
+                <!-- Upgrades Tab -->
+                <div id="tab-upgrades" class="space-y-3">
+                    <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800 flex justify-between items-center">
+                        <div>
+                            <h3 class="font-bold text-sm">🕰️ 시작 시간 증가</h3>
+                            <p class="text-xs text-slate-400">초기 시간 60초에서 추가 증가 (+2초)</p>
+                            <span id="upg-time-level" class="text-xs text-blue-400 font-semibold">Lv.1 (+0초)</span>
+                        </div>
+                        <button onclick="buyUpgrade('time')" id="upg-time-btn" class="bg-blue-600 hover:bg-blue-500 text-xs font-bold py-2 px-3 rounded-lg transition shrink-0">🪙 100</button>
+                    </div>
+                    <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800 flex justify-between items-center">
+                        <div>
+                            <h3 class="font-bold text-sm">💡 힌트 충전 증가</h3>
+                            <p class="text-xs text-slate-400">스테이지별 기본 힌트 개수 증가 (+1개)</p>
+                            <span id="upg-hint-level" class="text-xs text-blue-400 font-semibold">Lv.1 (+0개)</span>
+                        </div>
+                        <button onclick="buyUpgrade('hint')" id="upg-hint-btn" class="bg-blue-600 hover:bg-blue-500 text-xs font-bold py-2 px-3 rounded-lg transition shrink-0">🪙 150</button>
+                    </div>
+                    <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800 flex justify-between items-center">
+                        <div>
+                            <h3 class="font-bold text-sm">⚡ 콤보 보너스 강화</h3>
+                            <p class="text-xs text-slate-400">콤보 시 획득하는 추가 점수 비율 증가 (+5%)</p>
+                            <span id="upg-combo-level" class="text-xs text-blue-400 font-semibold">Lv.1 (+0%)</span>
+                        </div>
+                        <button onclick="buyUpgrade('combo')" id="upg-combo-btn" class="bg-blue-600 hover:bg-blue-500 text-xs font-bold py-2 px-3 rounded-lg transition shrink-0">🪙 200</button>
+                    </div>
+                    <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800 flex justify-between items-center">
+                        <div>
+                            <h3 class="font-bold text-sm">🌈 희귀 아이템 확률</h3>
+                            <p class="text-xs text-slate-400">게임 도중 상위 특수 타일 등장 확률 업 (+2%)</p>
+                            <span id="upg-rare-level" class="text-xs text-blue-400 font-semibold">Lv.1 (+0%)</span>
+                        </div>
+                        <button onclick="buyUpgrade('rare')" id="upg-rare-btn" class="bg-blue-600 hover:bg-blue-500 text-xs font-bold py-2 px-3 rounded-lg transition shrink-0">🪙 250</button>
+                    </div>
+                </div>
+
+                <!-- Missions Tab -->
+                <div id="tab-missions" class="hidden space-y-3">
+                    <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="font-bold text-sm">🎯 데일리 마스터</span>
+                            <span class="text-xs text-yellow-400">🪙 +50</span>
+                        </div>
+                        <p class="text-xs text-slate-400 mb-2">총 50개 이상의 타일 매치하여 제거하기</p>
+                        <div class="w-full bg-slate-950 rounded-full h-2 overflow-hidden">
+                            <div id="daily-progress" class="bg-emerald-500 h-full transition-all duration-300" style="width: 0%;"></div>
+                        </div>
+                        <span id="daily-text" class="text-[10px] text-slate-400 mt-1 block">0 / 50</span>
+                    </div>
+
+                    <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="font-bold text-sm">🏆 콤보 킹 (업적)</span>
+                            <span class="text-xs text-yellow-400">🪙 +100</span>
+                        </div>
+                        <p class="text-xs text-slate-400 mb-1">싱글 게임에서 15 콤보 돌파하기</p>
+                        <div id="ach-combo-status" class="text-xs text-red-400 font-semibold">미달성</div>
+                    </div>
+                </div>
+
+                <!-- Skins Tab -->
+                <div id="tab-skins" class="hidden grid grid-cols-2 gap-3">
+                    <div onclick="selectSkin('classic')" class="border-2 border-blue-500 bg-slate-900/80 p-3 rounded-xl text-center cursor-pointer transition" id="skin-classic">
+                        <div class="text-2xl mb-1">🍔🎈🍉</div>
+                        <div class="font-bold text-xs">클래식 맛집</div>
+                        <div class="text-[10px] text-blue-400 font-semibold mt-1">사용 중</div>
+                    </div>
+                    <div onclick="selectSkin('animal')" class="border-2 border-slate-800 bg-slate-900/80 p-3 rounded-xl text-center cursor-pointer transition" id="skin-animal">
+                        <div class="text-2xl mb-1">🐶🦁🐰</div>
+                        <div class="font-bold text-xs">애니멀 파크</div>
+                        <div id="skin-animal-status" class="text-[10px] text-yellow-400 font-semibold mt-1">🪙 300 잠금해제</div>
+                    </div>
+                    <div onclick="selectSkin('space')" class="border-2 border-slate-800 bg-slate-900/80 p-3 rounded-xl text-center cursor-pointer transition" id="skin-space">
+                        <div class="text-2xl mb-1">🚀🪐☄️</div>
+                        <div class="font-bold text-xs">우주 오디세이</div>
+                        <div id="skin-space-status" class="text-[10px] text-yellow-400 font-semibold mt-1">🪙 500 잠금해제</div>
+                    </div>
+                    <div onclick="selectSkin('fantasy')" class="border-2 border-slate-800 bg-slate-900/80 p-3 rounded-xl text-center cursor-pointer transition" id="skin-fantasy">
+                        <div class="text-2xl mb-1">🧙‍♂️🔮🦄</div>
+                        <div class="font-bold text-xs">판타지 마법</div>
+                        <div id="skin-fantasy-status" class="text-[10px] text-yellow-400 font-semibold mt-1">🪙 700 잠금해제</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Play Controls -->
+            <div class="space-y-3 mt-auto">
+                <div class="flex gap-2">
+                    <button onclick="startCampaign()" class="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold py-3 rounded-2xl transition shadow-lg shadow-indigo-900/40 text-sm md:text-base">
+                        🚀 캠페인 시작 (Stage 1)
+                    </button>
+                </div>
+                <div class="bg-slate-900/50 p-2.5 rounded-xl border border-slate-800/80 text-[11px] text-rose-400 text-center leading-relaxed">
+                    ⚠️ <strong class="text-rose-300 font-black">패널티 주의:</strong> 매칭에 실패하면 즉시 <strong class="underline font-black">시간이 크게 차감(-3초+)</strong>되고 모아놓은 <strong class="underline">콤보가 리셋</strong>됩니다! 신중하게 타일을 누르세요!
+                </div>
+            </div>
+        </div>
+
+        <!-- PLAYING HUD -->
+        <div class="bg-slate-950 p-4 border-b border-slate-800 flex justify-between items-center relative z-0 shrink-0">
+            <div>
+                <div class="flex items-center gap-1.5">
+                    <span id="game-stage" class="text-xs font-black tracking-wider bg-indigo-600 text-white px-2 py-0.5 rounded-md uppercase">STAGE 1</span>
+                    <span id="game-mode-tag" class="text-[10px] font-bold bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded">기본 2매치</span>
+                </div>
+                <div class="text-xl md:text-2xl font-black text-white mt-1" id="game-score">000,000</div>
+            </div>
+
+            <!-- Center Combo & Fever indicator -->
+            <div class="text-center">
+                <div class="text-[10px] uppercase font-bold text-slate-500 tracking-wider">COMBO</div>
+                <div class="text-2xl font-extrabold text-indigo-400 animate-bounce scale-110" id="game-combo">0</div>
+            </div>
+
+            <!-- Timer / Sound Control -->
+            <div class="text-right flex flex-col items-end">
+                <div class="flex items-center gap-2">
+                    <button onclick="toggleMute()" class="text-slate-400 hover:text-white transition">
+                        <i class="fa-solid fa-volume-high text-sm text-emerald-400" id="hud-mute-icon"></i>
+                    </button>
+                    <div>
+                        <span id="game-timer" class="text-2xl md:text-3xl font-mono font-black text-rose-500">60</span>
+                        <span class="text-xs text-rose-500 font-bold">초</span>
+                    </div>
+                </div>
+                <div class="text-[10px] text-slate-400 mt-0.5" id="game-multiplier">배수: x1.0</div>
+            </div>
+        </div>
+
+        <!-- Progress Bar (Time Indicator) -->
+        <div class="w-full h-1.5 bg-slate-950 relative overflow-hidden shrink-0">
+            <div id="timer-progress" class="absolute top-0 left-0 bottom-0 bg-gradient-to-r from-red-500 via-orange-500 to-indigo-500 transition-all duration-100" style="width: 100%;"></div>
+        </div>
+
+        <!-- GAME BOARD VIEWPORT -->
+        <div class="flex-1 bg-slate-950/40 p-2 md:p-4 flex flex-col justify-center items-center relative overflow-hidden">
+            <!-- Shisen-sho Line Overlay Canvas -->
+            <canvas id="line-canvas" class="absolute inset-0 pointer-events-none z-10 w-full h-full"></canvas>
+
+            <!-- Screen Shake Target -->
+            <div id="board-container" class="w-full max-w-lg aspect-square grid gap-1.5 md:gap-2 justify-center content-center relative z-0 transition-all duration-200 border border-transparent rounded-2xl">
+                <!-- Tiles injected dynamically via JS -->
+            </div>
+        </div>
+
+        <!-- ACTIVE ITEMS & CONTROLS -->
+        <div class="bg-slate-950 p-3 md:p-4 border-t border-slate-800 shrink-0">
+            <!-- Active Booster Items -->
+            <div class="grid grid-cols-5 gap-2 mb-3">
+                <button onclick="useItem('hint')" class="flex flex-col items-center justify-center bg-slate-900 border border-slate-800 hover:bg-slate-800 rounded-xl py-2 transition active:scale-95">
+                    <span class="text-lg md:text-xl">💡</span>
+                    <span class="text-[10px] font-bold mt-1">힌트</span>
+                    <span id="item-hint-qty" class="text-[9px] text-blue-400 font-semibold mt-0.5">3 / 3</span>
+                </button>
+                <button onclick="useItem('shuffle')" class="flex flex-col items-center justify-center bg-slate-900 border border-slate-800 hover:bg-slate-800 rounded-xl py-2 transition active:scale-95">
+                    <span class="text-lg md:text-xl">🔄</span>
+                    <span class="text-[10px] font-bold mt-1">셔플</span>
+                    <span id="item-shuffle-qty" class="text-[9px] text-blue-400 font-semibold mt-0.5">2 / 2</span>
+                </button>
+                <button onclick="useItem('time')" class="flex flex-col items-center justify-center bg-slate-900 border border-slate-800 hover:bg-slate-800 rounded-xl py-2 transition active:scale-95">
+                    <span class="text-lg md:text-xl">⏱️</span>
+                    <span class="text-[10px] font-bold mt-1">+15초</span>
+                    <span id="item-time-qty" class="text-[9px] text-blue-400 font-semibold mt-0.5">1 / 1</span>
+                </button>
+                <button onclick="useItem('autoremove')" class="flex flex-col items-center justify-center bg-slate-900 border border-slate-800 hover:bg-slate-800 rounded-xl py-2 transition active:scale-95">
+                    <span class="text-lg md:text-xl">⚡</span>
+                    <span class="text-[10px] font-bold mt-1">자동제거</span>
+                    <span id="item-autoremove-qty" class="text-[9px] text-blue-400 font-semibold mt-0.5">1 / 1</span>
+                </button>
+                <button onclick="useItem('slow')" class="flex flex-col items-center justify-center bg-slate-900 border border-slate-800 hover:bg-slate-800 rounded-xl py-2 transition active:scale-95">
+                    <span class="text-lg md:text-xl">🐌</span>
+                    <span class="text-[10px] font-bold mt-1">슬로우</span>
+                    <span id="item-slow-qty" class="text-[9px] text-blue-400 font-semibold mt-0.5">1 / 1</span>
+                </button>
+            </div>
+
+            <!-- Footer Exit / Restart / Settings button -->
+            <div class="flex justify-between items-center">
+                <button onclick="exitToLobby()" class="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 transition">
+                    <i class="fa-solid fa-house"></i> 로비로 가기
+                </button>
+                <div class="text-xs text-slate-500 font-semibold" id="game-status-tip">
+                    같은 타일을 터치하여 매치하세요!
+                </div>
+            </div>
+        </div>
+
+        <!-- NOTIFICATION BANNER / LEVEL CLEAR / GAME OVER MODAL -->
+        <div id="modal-overlay" class="hidden absolute inset-0 bg-slate-950/90 z-30 flex flex-col justify-center items-center p-6 text-center">
+            <div id="modal-content" class="bg-slate-900 border border-slate-800 p-6 rounded-3xl max-w-sm w-full shadow-2xl scale-95 transition-all">
+                <div id="modal-icon" class="text-5xl mb-3">🏆</div>
+                <h2 id="modal-title" class="text-2xl font-black mb-2">스테이지 클리어!</h2>
+                <div id="modal-body" class="text-sm text-slate-400 mb-6 space-y-2">
+                    <!-- Dynamic details injected here -->
+                </div>
+                <div class="space-y-2">
+                    <button id="modal-action-btn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-2xl transition">다음 스테이지</button>
+                    <button onclick="exitToLobby(true)" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-2.5 rounded-2xl transition">메인 메뉴</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- RULE TUTORIAL OVERLAY -->
+        <div id="tutorial-overlay" class="hidden absolute inset-0 bg-slate-950/95 z-40 flex flex-col justify-center items-center p-6 text-center">
+            <div class="bg-slate-900 border border-slate-800 p-6 rounded-3xl max-w-sm w-full shadow-2xl scale-95 transition-all">
+                <div id="tutorial-icon" class="text-5xl mb-3 animate-bounce">⚠️</div>
+                <h2 id="tutorial-title" class="text-xl font-black mb-3 text-yellow-400">새로운 규칙 등장!</h2>
+                <div id="tutorial-body" class="text-sm text-slate-300 mb-6 leading-relaxed space-y-3 bg-slate-950/50 p-4 rounded-xl border border-slate-800 text-left">
+                    <!-- Dynamic details injected here -->
+                </div>
+                <button onclick="closeRuleTutorial()" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold py-3 rounded-2xl transition shadow-lg shadow-indigo-900/40 text-sm">
+                    알겠습니다! 도전하기 🚀
+                </button>
+            </div>
+        </div>
+
+        <!-- Floater Messages Anchor (For score pops and combo pops) -->
+        <div id="floater-anchor" class="absolute inset-0 pointer-events-none z-30"></div>
+    </div>
+
+    <script>
+        class SoundSynth {
+            constructor() {
+                this.ctx = null;
+                this.muted = false;
+                this.bgmInterval = null;
+                this.bgmStep = 0;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    this.startProceduralBGM();
+                }
+            }
+
+            playBeep(freq, type, duration, vol = 0.08) {
+                this.init();
+                if (!this.ctx || this.muted) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + duration);
+                } catch (e) { console.warn(e); }
+            }
+
+            playClick() {
+                this.playBeep(440, 'sine', 0.08, 0.12);
+            }
+
+            playMatch() {
+                this.init();
+                if (!this.ctx || this.muted) return;
+                const now = this.ctx.currentTime;
+                this.playBeep(523.25, 'sine', 0.12, 0.1); // C5
+                setTimeout(() => this.playBeep(659.25, 'sine', 0.18, 0.1), 60); // E5
+            }
+
+            playCombo(combo) {
+                this.init();
+                const baseFreq = 400 + Math.min(combo * 45, 650);
+                this.playBeep(baseFreq, 'triangle', 0.22, 0.15);
+                if (combo >= 5) {
+                    setTimeout(() => this.playBeep(baseFreq * 1.25, 'sine', 0.12, 0.1), 70);
+                }
+            }
+
+            playError() {
+                this.playBeep(180, 'sawtooth', 0.35, 0.2);
+                setTimeout(() => this.playBeep(120, 'sawtooth', 0.25, 0.2), 80);
+            }
+
+            playTick() {
+                this.playBeep(1500, 'sine', 0.04, 0.08);
+            }
+
+            playExplosion() {
+                this.init();
+                if (!this.ctx || this.muted) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(120, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(20, this.ctx.currentTime + 0.45);
+                    gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + 0.45);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.45);
+                } catch (e) {}
+            }
+
+            playFever() {
+                this.init();
+                if (!this.ctx || this.muted) return;
+                const now = this.ctx.currentTime;
+                // High tempo rising synth for fever triggers
+                this.playBeep(587.33, 'square', 0.15, 0.08); // D5
+                setTimeout(() => this.playBeep(698.46, 'square', 0.15, 0.08), 100); // F5
+                setTimeout(() => this.playBeep(880.00, 'square', 0.3, 0.1), 200); // A5
+            }
+
+            playGameOver() {
+                this.init();
+                this.playBeep(330, 'sawtooth', 0.4, 0.12); // E3
+                setTimeout(() => this.playBeep(261.63, 'sawtooth', 0.55, 0.15), 220); // C3
+            }
+
+            playClear() {
+                this.init();
+                const notes = [523.25, 587.33, 659.25, 783.99, 880.00, 1046.50];
+                notes.forEach((freq, i) => {
+                    setTimeout(() => {
+                        this.playBeep(freq, 'sine', 0.25, 0.12);
+                    }, i * 100);
+                });
+            }
+
+            startProceduralBGM() {
+                if (this.bgmInterval) return;
+
+                const chords = [
+                    [220, 261.63, 329.63, 440],     // Am
+                    [174.61, 220.00, 261.63, 349.23], // F
+                    [130.81, 164.81, 196.00, 261.63], // C
+                    [196.00, 246.94, 293.66, 392.00]  // G
+                ];
+
+                this.bgmInterval = setInterval(() => {
+                    if (this.muted) return;
+
+                    const chordIdx = Math.floor(this.bgmStep / 4) % chords.length;
+                    const noteIdx = this.bgmStep % 4;
+                    let freq = chords[chordIdx][noteIdx];
+
+                    if (GAME.isFever) {
+                        freq *= 1.5;
+                    }
+
+                    if (GAME.gameState === 'playing') {
+                        this.playBeep(freq, 'triangle', 0.15, 0.025);
+                    } else if (GAME.gameState === 'lobby') {
+                        if (this.bgmStep % 2 === 0) {
+                            this.playBeep(freq * 0.5, 'sine', 0.3, 0.02);
+                        }
+                    }
+
+                    this.bgmStep++;
+                }, 220); // 136 BPM
+            }
+
+            setMuted(val) {
+                this.muted = val;
+            }
+        }
+
+        const SFX = new SoundSynth();
+
+        // --- Game State Management ---
+        const GAME = {
+            stage: 1,
+            score: 0,
+            gold: 0,
+            highscore: 0,
+            combo: 0,
+            comboTimer: null,
+            comboExpires: 0,
+            timeLeft: 60,
+            maxTime: 120,
+            isFever: false,
+            feverTimeLeft: 0,
+            slowMoLeft: 0,
+            activeMode: 'basic', // basic, advanced, expert
+            gridSize: 4,
+            tiles: [],
+            selectedTiles: [],
+            gameState: 'lobby',
+            keyTileCleared: false,
+            upgrades: {
+                time: 1,
+                hint: 1,
+                combo: 1,
+                rare: 1
+            },
+            inventory: {
+                hint: 3,
+                shuffle: 2,
+                time: 1,
+                autoremove: 1,
+                slow: 1
+            },
+            unlockedSkins: ['classic'],
+            selectedSkin: 'classic',
+            dailyMatchCount: 0,
+            highestComboAchieved: 0,
+            feverInterval: null,
+            mainInterval: null,
+            shownTutorials: {
+                advanced: false,
+                expert: false
+            }
+        };
+
+        // Emoji skins
+        const SKINS = {
+            classic: ['🍔', '🍕', '🍰', '🍉', '🎈', '🚗', '🐱', '🚀', '⚽', '💎'],
+            animal: ['🐶', '🐱', '🦁', '🐰', '🐼', '🦊', '🐸', '🐵', '🐔', '🦄'],
+            space: ['🚀', '🪐', '☄️', '🛸', '⭐', '🌌', '👽', '🛰️', '🌜', '🌞'],
+            fantasy: ['🧙‍♂️', '🔮', '🦄', '🐉', '🏰', '👑', '💎', '🧪', '🏹', '🧿']
+        };
+
+        // --- LocalStorage Save / Load ---
+        function loadGameData() {
+            try {
+                const saved = localStorage.getItem('tilematch_save_hardcore');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    GAME.highscore = parsed.highscore || 0;
+                    GAME.gold = parsed.gold || 0;
+                    GAME.upgrades = parsed.upgrades || { time: 1, hint: 1, combo: 1, rare: 1 };
+                    GAME.unlockedSkins = parsed.unlockedSkins || ['classic'];
+                    GAME.selectedSkin = parsed.selectedSkin || 'classic';
+                    GAME.dailyMatchCount = parsed.dailyMatchCount || 0;
+                    GAME.highestComboAchieved = parsed.highestComboAchieved || 0;
+                    SFX.muted = parsed.muted || false;
+                }
+            } catch (e) {
+                console.error("Save loading failed", e);
+            }
+        }
+
+        function saveGameData() {
+            try {
+                const data = {
+                    highscore: GAME.highscore,
+                    gold: GAME.gold,
+                    upgrades: GAME.upgrades,
+                    unlockedSkins: GAME.unlockedSkins,
+                    selectedSkin: GAME.selectedSkin,
+                    dailyMatchCount: GAME.dailyMatchCount,
+                    highestComboAchieved: GAME.highestComboAchieved,
+                    muted: SFX.muted
+                };
+                localStorage.setItem('tilematch_save_hardcore', JSON.stringify(data));
+            } catch (e) {
+                console.error("Saving state failed", e);
+            }
+        }
+
+        function toggleMute() {
+            SFX.init();
+            SFX.muted = !SFX.muted;
+            SFX.playClick();
+            saveGameData();
+
+            const lobbyIcon = document.getElementById('lobby-mute-icon');
+            const lobbyText = document.getElementById('lobby-mute-text');
+            const hudIcon = document.getElementById('hud-mute-icon');
+
+            if (SFX.muted) {
+                lobbyIcon.className = "fa-solid fa-volume-xmark text-rose-500";
+                lobbyText.innerText = "소리 끔";
+                hudIcon.className = "fa-solid fa-volume-xmark text-rose-500";
+            } else {
+                lobbyIcon.className = "fa-solid fa-volume-high text-emerald-400";
+                lobbyText.innerText = "소리 켬";
+                hudIcon.className = "fa-solid fa-volume-high text-emerald-400";
+            }
+        }
+
+        function switchTab(tabId) {
+            SFX.playClick();
+            document.getElementById('tab-upgrades').classList.add('hidden');
+            document.getElementById('tab-missions').classList.add('hidden');
+            document.getElementById('tab-skins').classList.add('hidden');
+            ['upgrades', 'missions', 'skins'].forEach(t => {
+                const btn = document.getElementById(`tab-btn-${t}`);
+                btn.classList.remove('border-blue-500', 'text-blue-400');
+                btn.classList.add('border-transparent', 'text-slate-400');
+            });
+
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+            const activeBtn = document.getElementById(`tab-btn-${tabId}`);
+            activeBtn.classList.remove('border-transparent', 'text-slate-400');
+            activeBtn.classList.add('border-blue-500', 'text-blue-400');
+        }
+
+        function refreshLobbyUI() {
+            document.getElementById('lobby-highscore').innerText = GAME.highscore.toLocaleString();
+            document.getElementById('lobby-gold').innerText = `🪙 ${GAME.gold.toLocaleString()}`;
+
+            const upgCosts = {
+                time: 100 * GAME.upgrades.time,
+                hint: 150 * GAME.upgrades.hint,
+                combo: 200 * GAME.upgrades.combo,
+                rare: 250 * GAME.upgrades.rare
+            };
+
+            document.getElementById('upg-time-level').innerText = `Lv.${GAME.upgrades.time} (+${(GAME.upgrades.time - 1) * 2}초)`;
+            document.getElementById('upg-time-btn').innerText = `🪙 ${upgCosts.time}`;
+            document.getElementById('upg-hint-level').innerText = `Lv.${GAME.upgrades.hint} (+${GAME.upgrades.hint - 1}개)`;
+            document.getElementById('upg-hint-btn').innerText = `🪙 ${upgCosts.hint}`;
+            document.getElementById('upg-combo-level').innerText = `Lv.${GAME.upgrades.combo} (+${(GAME.upgrades.combo - 1) * 5}%)`;
+            document.getElementById('upg-combo-btn').innerText = `🪙 ${upgCosts.combo}`;
+            document.getElementById('upg-rare-level').innerText = `Lv.${GAME.upgrades.rare} (+${(GAME.upgrades.rare - 1) * 2}%)`;
+            document.getElementById('upg-rare-btn').innerText = `🪙 ${upgCosts.rare}`;
+
+            const dailyProgPercent = Math.min((GAME.dailyMatchCount / 50) * 100, 100);
+            document.getElementById('daily-progress').style.width = `${dailyProgPercent}%`;
+            document.getElementById('daily-text').innerText = `${GAME.dailyMatchCount} / 50`;
+
+            document.getElementById('ach-combo-status').innerText = GAME.highestComboAchieved >= 15 ? "🏆 달성 완료! (보너스 지급됨)" : `${GAME.highestComboAchieved} / 15 콤보`;
+            document.getElementById('ach-combo-status').className = GAME.highestComboAchieved >= 15 ? "text-xs text-emerald-400 font-bold" : "text-xs text-rose-400 font-semibold";
+
+            const skinsPrice = { animal: 300, space: 500, fantasy: 700 };
+            Object.keys(skinsPrice).forEach(skin => {
+                const statusEl = document.getElementById(`skin-${skin}-status`);
+                if (GAME.unlockedSkins.includes(skin)) {
+                    statusEl.innerText = GAME.selectedSkin === skin ? "사용 중" : "장착 가능";
+                    statusEl.className = GAME.selectedSkin === skin ? "text-[10px] text-blue-400 font-semibold mt-1" : "text-[10px] text-slate-400 font-semibold mt-1";
+                } else {
+                    statusEl.innerText = `🪙 ${skinsPrice[skin]} 잠금해제`;
+                    statusEl.className = "text-[10px] text-yellow-400 font-semibold mt-1";
+                }
+
+                const card = document.getElementById(`skin-${skin}`);
+                if (GAME.selectedSkin === skin) {
+                    card.classList.add('border-blue-500');
+                    card.classList.remove('border-slate-800');
+                } else {
+                    card.classList.remove('border-blue-500');
+                    card.classList.add('border-slate-800');
+                }
+            });
+
+            const classicCard = document.getElementById('skin-classic');
+            if (GAME.selectedSkin === 'classic') {
+                classicCard.classList.add('border-blue-500');
+                classicCard.classList.remove('border-slate-800');
+            } else {
+                classicCard.classList.remove('border-blue-500');
+                classicCard.classList.add('border-slate-800');
+            }
+
+            const lobbyIcon = document.getElementById('lobby-mute-icon');
+            const lobbyText = document.getElementById('lobby-mute-text');
+            const hudIcon = document.getElementById('hud-mute-icon');
+
+            if (SFX.muted) {
+                lobbyIcon.className = "fa-solid fa-volume-xmark text-rose-500";
+                lobbyText.innerText = "소리 끔";
+                hudIcon.className = "fa-solid fa-volume-xmark text-rose-500";
+            } else {
+                lobbyIcon.className = "fa-solid fa-volume-high text-emerald-400";
+                lobbyText.innerText = "소리 켬";
+                hudIcon.className = "fa-solid fa-volume-high text-emerald-400";
+            }
+        }
+
+        function buyUpgrade(type) {
+            SFX.init();
+            const upgCosts = {
+                time: 100 * GAME.upgrades.time,
+                hint: 150 * GAME.upgrades.hint,
+                combo: 200 * GAME.upgrades.combo,
+                rare: 250 * GAME.upgrades.rare
+            };
+
+            const cost = upgCosts[type];
+            if (GAME.gold >= cost) {
+                GAME.gold -= cost;
+                GAME.upgrades[type]++;
+                SFX.playMatch();
+                saveGameData();
+                refreshLobbyUI();
+            } else {
+                showToast("골드가 부족합니다!");
+                SFX.playClick();
+            }
+        }
+
+        function selectSkin(skinId) {
+            SFX.init();
+            const skinsPrice = { classic: 0, animal: 300, space: 500, fantasy: 700 };
+            
+            if (GAME.unlockedSkins.includes(skinId)) {
+                GAME.selectedSkin = skinId;
+                SFX.playClick();
+            } else {
+                const cost = skinsPrice[skinId];
+                if (GAME.gold >= cost) {
+                    GAME.gold -= cost;
+                    GAME.unlockedSkins.push(skinId);
+                    GAME.selectedSkin = skinId;
+                    SFX.playMatch();
+                    showToast("스킨 잠금 해제 완료!");
+                } else {
+                    showToast("골드가 부족하여 스킨을 잠금 해제할 수 없습니다.");
+                    SFX.playClick();
+                    return;
+                }
+            }
+            saveGameData();
+            refreshLobbyUI();
+        }
+
+        function showToast(msg) {
+            const anchor = document.getElementById('floater-anchor');
+            const toast = document.createElement('div');
+            toast.className = "absolute bottom-10 left-1/2 -translate-x-1/2 bg-slate-800 border border-slate-700 text-white text-xs px-4 py-2 rounded-xl shadow-xl z-50 animate-bounce";
+            toast.innerText = msg;
+            anchor.appendChild(toast);
+            setTimeout(() => toast.remove(), 2500);
+        }
+
+        function getStageLayout(stage) {
+            if (stage <= 5) return { size: 4, mode: 'basic' };     // 4x4, basic
+            if (stage <= 15) return { size: 6, mode: 'advanced' }; // 6x6, advanced
+            if (stage <= 30) return { size: 8, mode: 'expert' };   // 8x8, Shisen-sho
+            return { size: 10, mode: 'expert' };                   // 10x10, Shisen-sho
+        }
+
+        function startCampaign() {
+            GAME.stage = 1;
+            GAME.score = 0;
+            GAME.shownTutorials = { advanced: false, expert: false };
+            startGameFlow();
+        }
+
+        function startGameFlow() {
+            SFX.init();
+            const layout = getStageLayout(GAME.stage);
+            GAME.gridSize = layout.size;
+            GAME.activeMode = layout.mode;
+
+            GAME.inventory.hint = GAME.upgrades.hint + 2;
+            GAME.inventory.shuffle = 2;
+            GAME.inventory.time = 1;
+            GAME.inventory.autoremove = 1;
+            GAME.inventory.slow = 1;
+
+            GAME.timeLeft = 60 + (GAME.upgrades.time - 1) * 2;
+            if (GAME.timeLeft > GAME.maxTime) GAME.timeLeft = GAME.maxTime;
+
+            GAME.combo = 0;
+            GAME.keyTileCleared = false;
+            GAME.selectedTiles = [];
+            GAME.isFever = false;
+            GAME.feverTimeLeft = 0;
+            GAME.slowMoLeft = 0;
+
+            document.getElementById('lobby-screen').classList.add('hidden');
+            document.getElementById('fever-screen').classList.add('hidden');
+
+            setupInventoryHUD();
+            generateBoard();
+
+            if (GAME.stage === 6 && !GAME.shownTutorials.advanced) {
+                showRuleTutorial('advanced');
+            } else if (GAME.stage === 16 && !GAME.shownTutorials.expert) {
+                showRuleTutorial('expert');
+            } else {
+                GAME.gameState = 'playing';
+                startLoops();
+            }
+        }
+
+        function setupInventoryHUD() {
+            document.getElementById('item-hint-qty').innerText = `${GAME.inventory.hint} / ${GAME.inventory.hint}`;
+            document.getElementById('item-shuffle-qty').innerText = `${GAME.inventory.shuffle} / 2`;
+            document.getElementById('item-time-qty').innerText = `${GAME.inventory.time} / 1`;
+            document.getElementById('item-autoremove-qty').innerText = `${GAME.inventory.autoremove} / 1`;
+            document.getElementById('item-slow-qty').innerText = `${GAME.inventory.slow} / 1`;
+        }
+
+        function generateBoard() {
+            const container = document.getElementById('board-container');
+            container.innerHTML = '';
+            container.style.gridTemplateColumns = `repeat(${GAME.gridSize}, minmax(0, 1fr))`;
+            
+            const totalCells = GAME.gridSize * GAME.gridSize;
+            let groupSize = GAME.activeMode === 'advanced' ? 3 : 2;
+
+            const isBoss = GAME.stage % 10 === 0;
+            const availableEmojis = [...SKINS[GAME.selectedSkin]];
+            
+            let rawPool = [];
+            let needsLockKey = isBoss || (GAME.stage >= 15 && Math.random() < 0.4);
+
+            let reservedPairsCount = 0;
+            if (needsLockKey) {
+                const lockSymbol = availableEmojis[0];
+                for (let k = 0; k < groupSize; k++) {
+                    rawPool.push({
+                        id: rawPool.length,
+                        symbol: lockSymbol,
+                        type: 'lock',
+                        iceHitCount: 0,
+                        isLocked: true
+                    });
+                }
+                for (let k = 0; k < groupSize; k++) {
+                    rawPool.push({
+                        id: rawPool.length,
+                        symbol: '🔑',
+                        type: 'normal',
+                        iceHitCount: 0,
+                        isLocked: false
+                    });
+                }
+                reservedPairsCount += 2;
+            }
+
+            const cellsRemaining = totalCells - (reservedPairsCount * groupSize);
+            const neededNormalGroups = Math.floor(cellsRemaining / groupSize);
+
+            for (let i = 0; i < neededNormalGroups; i++) {
+                const emojiIdx = (i + (needsLockKey ? 1 : 0)) % availableEmojis.length;
+                const symbol = availableEmojis[emojiIdx];
+
+                for (let k = 0; k < groupSize; k++) {
+                    rawPool.push({
+                        id: rawPool.length,
+                        symbol: symbol,
+                        type: 'normal',
+                        iceHitCount: 0,
+                        isLocked: false
+                    });
+                }
+            }
+
+            let specialOdds = 0.05 + (GAME.upgrades.rare - 1) * 0.02;
+            if (isBoss) specialOdds += 0.10;
+
+            let normalGroupsCount = neededNormalGroups;
+            const specialTypes = ['bomb', 'lightning', 'rainbow', 'ice', 'gold'];
+
+            for (let g = 0; g < normalGroupsCount; g++) {
+                if (Math.random() < specialOdds) {
+                    const chosenSpecialType = specialTypes[Math.floor(Math.random() * specialTypes.length)];
+                    const startIdx = (needsLockKey ? groupSize * 2 : 0) + (g * groupSize);
+                    for (let k = 0; k < groupSize; k++) {
+                        const tile = rawPool[startIdx + k];
+                        if (tile) {
+                            tile.type = chosenSpecialType;
+                            if (chosenSpecialType === 'ice') {
+                                tile.iceHitCount = 2;
+                            }
+                        }
+                    }
+                }
+            }
+
+            rawPool = rawPool.sort(() => Math.random() - 0.5);
+
+            rawPool.forEach((tile, idx) => {
+                tile.id = idx;
+            });
+
+            GAME.tiles = rawPool;
+            renderTiles();
+            checkSolvability();
+        }
+
+        function renderTiles() {
+            const container = document.getElementById('board-container');
+            container.innerHTML = '';
+
+            GAME.tiles.forEach((tile, idx) => {
+                const btn = document.createElement('button');
+                btn.id = `tile-${idx}`;
+                btn.className = "relative flex items-center justify-center font-bold select-none text-2xl md:text-3xl rounded-xl transition duration-150 transform active:scale-95 shadow-lg border ";
+                
+                applyTileStyles(btn, tile);
+
+                if (tile.cleared) {
+                    btn.className = "opacity-0 pointer-events-none";
+                    btn.innerHTML = '';
+                } else {
+                    btn.onclick = () => onTileClick(idx);
+                }
+
+                container.appendChild(btn);
+            });
+        }
+
+        function applyTileStyles(btn, tile) {
+            if (tile.type === 'gold') {
+                btn.className += " gold-shimmer border-amber-300 text-white shadow-amber-500/20";
+                btn.innerHTML = `<span>${tile.symbol}</span><div class="absolute bottom-0.5 right-1 text-[8px] bg-amber-950 px-1 rounded font-black text-amber-300">GOLD</div>`;
+            } else if (tile.type === 'bomb') {
+                btn.className += " bg-gradient-to-br from-slate-900 to-red-950 border-red-500 text-white shadow-red-950/50";
+                btn.innerHTML = `<span>${tile.symbol}</span><div class="absolute -top-1 -right-1 text-[10px]">💣</div>`;
+            } else if (tile.type === 'lightning') {
+                btn.className += " bg-gradient-to-br from-slate-900 to-indigo-950 border-cyan-400 text-white";
+                btn.innerHTML = `<span>${tile.symbol}</span><div class="absolute -top-1 -right-1 text-[10px]">⚡</div>`;
+            } else if (tile.type === 'rainbow') {
+                btn.className += " bg-gradient-to-br from-indigo-950 via-purple-950 to-pink-950 border-purple-400 text-white";
+                btn.innerHTML = `<span>${tile.symbol}</span><div class="absolute -top-1 -right-1 text-[10px]">🌈</div>`;
+            } else if (tile.type === 'ice') {
+                btn.className += " bg-gradient-to-br from-sky-900 to-slate-950 border-sky-400 text-white shadow-sky-900/40";
+                btn.innerHTML = `<span>${tile.symbol}</span><div class="absolute inset-0 bg-sky-200/20 backdrop-blur-[1px] rounded-xl flex items-center justify-center font-black text-sky-300 text-xs border border-sky-400/50">${tile.iceHitCount}x❄️</div>`;
+            } else if (tile.isLocked) {
+                btn.className += " bg-slate-950 border-dashed border-red-500 text-slate-600 cursor-not-allowed";
+                btn.innerHTML = `<span class="opacity-30">${tile.symbol}</span><div class="absolute inset-0 flex items-center justify-center bg-slate-950/80 rounded-xl">🔒</div>`;
+            } else {
+                btn.className += " bg-slate-800 hover:bg-slate-700 border-slate-700 text-white shadow-indigo-950/20";
+                btn.innerHTML = `<span>${tile.symbol}</span>`;
+            }
+
+            if (tile.isLocked && !GAME.keyTileCleared) {
+                btn.classList.add('cursor-not-allowed', 'opacity-50');
+            }
+        }
+
+        function onTileClick(idx) {
+            SFX.init();
+            const tile = GAME.tiles[idx];
+            if (!tile || tile.cleared) return;
+
+            if (tile.isLocked && !GAME.keyTileCleared) {
+                showToast("🔑 열쇠 타일을 먼저 지워야 잠금이 열립니다!");
+                SFX.playClick();
+                return;
+            }
+
+            const btn = document.getElementById(`tile-${idx}`);
+
+            if (GAME.selectedTiles.includes(idx)) {
+                GAME.selectedTiles = GAME.selectedTiles.filter(i => i !== idx);
+                btn.classList.remove('ring-4', 'ring-blue-400', 'scale-105');
+                SFX.playClick();
+            } else {
+                GAME.selectedTiles.push(idx);
+                btn.classList.add('ring-4', 'ring-blue-400', 'scale-105');
+                SFX.playClick();
+
+                const requiredMatches = GAME.activeMode === 'advanced' ? 3 : 2;
+                if (GAME.selectedTiles.length === requiredMatches) {
+                    checkMatch();
+                }
+            }
+        }
+
+        function checkMatch() {
+            const matches = GAME.selectedTiles.map(idx => GAME.tiles[idx]);
+            const isAllSameSymbol = matches.every(t => t.symbol === matches[0].symbol);
+
+            let pathValid = true;
+            if (GAME.activeMode === 'expert' && isAllSameSymbol) {
+                pathValid = checkExpertPath(GAME.selectedTiles[0], GAME.selectedTiles[1]);
+            }
+
+            if (isAllSameSymbol && pathValid) {
+                const tilesToClear = [...GAME.selectedTiles];
+                GAME.selectedTiles = [];
+                handleSuccessMatch(tilesToClear);
+            } else {
+                const penaltyAmount = 3 + Math.floor(GAME.stage / 8); 
+                GAME.timeLeft -= penaltyAmount;
+                if (GAME.timeLeft < 0) GAME.timeLeft = 0;
+                
+                GAME.combo = 0;
+                SFX.playError();
+
+                const viewport = document.getElementById('board-container');
+                viewport.classList.add('border-red-600', 'bg-red-950/20');
+                setTimeout(() => {
+                    viewport.classList.remove('border-red-600', 'bg-red-950/20');
+                }, 300);
+
+                showPenaltyPop(GAME.selectedTiles[0], penaltyAmount);
+
+                GAME.selectedTiles.forEach(idx => {
+                    const btn = document.getElementById(`tile-${idx}`);
+                    if (btn) {
+                        btn.classList.remove('ring-4', 'ring-blue-400');
+                        btn.classList.add('shake', 'border-red-500');
+                        setTimeout(() => {
+                            btn.classList.remove('shake', 'border-red-500');
+                        }, 400);
+                    }
+                });
+                GAME.selectedTiles = [];
+                updateHUD();
+            }
+        }
+
+        function checkExpertPath(idx1, idx2) {
+            const r1 = Math.floor(idx1 / GAME.gridSize);
+            const c1 = idx1 % GAME.gridSize;
+            const r2 = Math.floor(idx2 / GAME.gridSize);
+            const c2 = idx2 % GAME.gridSize;
+
+            const paddedRows = GAME.gridSize + 2;
+            const paddedCols = GAME.gridSize + 2;
+
+            const isBlocked = (r, c) => {
+                if (r < 0 || r >= paddedRows || c < 0 || c >= paddedCols) return true;
+                if (r === 0 || r === paddedRows - 1 || c === 0 || c === paddedCols - 1) return false;
+                
+                const origR = r - 1;
+                const origC = c - 1;
+                const origIdx = origR * GAME.gridSize + origC;
+
+                if (origR === r1 && origC === c1) return false;
+                if (origR === r2 && origC === c2) return false;
+
+                const tile = GAME.tiles[origIdx];
+                return tile && !tile.cleared;
+            };
+
+            const sr = r1 + 1, sc = c1 + 1;
+            const er = r2 + 1, ec = c2 + 1;
+
+            const queue = [];
+            const visited = Array.from({ length: paddedRows }, () => Array.from({ length: paddedCols }, () => [false, false, false, false]));
+
+            const dirs = [[-1, 0], [0, 1], [1, 0], [0, -1]];
+            for (let d = 0; d < 4; d++) {
+                const nr = sr + dirs[d][0];
+                const nc = sc + dirs[d][1];
+                if (!isBlocked(nr, nc)) {
+                    queue.push({ r: nr, c: nc, dir: d, turns: 0, path: [[sr, sc], [nr, nc]] });
+                    visited[nr][nc][d] = true;
+                }
+            }
+
+            let foundPath = null;
+
+            while (queue.length > 0) {
+                const curr = queue.shift();
+
+                if (curr.r === er && curr.c === ec) {
+                    if (curr.turns <= 2) {
+                        foundPath = curr.path;
+                        break;
+                    }
+                }
+
+                for (let d = 0; d < 4; d++) {
+                    const nr = curr.r + dirs[d][0];
+                    const nc = curr.c + dirs[d][1];
+                    
+                    if (nr >= 0 && nr < paddedRows && nc >= 0 && nc < paddedCols) {
+                        const newTurns = curr.dir === d ? curr.turns : curr.turns + 1;
+                        if (newTurns <= 2 && !isBlocked(nr, nc)) {
+                            if (!visited[nr][nc][d]) {
+                                visited[nr][nc][d] = true;
+                                queue.push({
+                                    r: nr,
+                                    c: nc,
+                                    dir: d,
+                                    turns: newTurns,
+                                    path: [...curr.path, [nr, nc]]
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (foundPath) {
+                drawConnectorLine(foundPath);
+                return true;
+            }
+            return false;
+        }
+
+        function drawConnectorLine(paddedPath) {
+            const canvas = document.getElementById('line-canvas');
+            const container = document.getElementById('board-container');
+            if (!canvas || !container) return;
+
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const containerRect = container.getBoundingClientRect();
+            const canvasRect = canvas.getBoundingClientRect();
+
+            const cellWidth = containerRect.width / GAME.gridSize;
+            const cellHeight = containerRect.height / GAME.gridSize;
+
+            ctx.beginPath();
+            paddedPath.forEach((pt, idx) => {
+                const pr = pt[0];
+                const pc = pt[1];
+
+                const x = (pc - 1.5) * cellWidth + cellWidth / 2 + (containerRect.left - canvasRect.left);
+                const y = (pr - 1.5) * cellHeight + cellHeight / 2 + (containerRect.top - canvasRect.top);
+
+                if (idx === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            });
+
+            ctx.strokeStyle = '#22d3ee';
+            ctx.lineWidth = 4;
+            ctx.shadowColor = '#06b6d4';
+            ctx.shadowBlur = 10;
+            ctx.stroke();
+
+            setTimeout(() => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }, 300);
+        }
+
+        function handleSuccessMatch(tileIndices) {
+            let actuallyCleared = [];
+            let hitsIce = false;
+
+            tileIndices.forEach(idx => {
+                const tile = GAME.tiles[idx];
+                if (tile.type === 'ice' && tile.iceHitCount > 1) {
+                    tile.iceHitCount--;
+                    hitsIce = true;
+                    const btn = document.getElementById(`tile-${idx}`);
+                    applyTileStyles(btn, tile);
+                    createExplosionEffect(idx, '❄️');
+                } else {
+                    tile.cleared = true;
+                    actuallyCleared.push(idx);
+                }
+            });
+
+            if (hitsIce) {
+                SFX.playClick();
+                return;
+            }
+
+            SFX.playMatch();
+            actuallyCleared.forEach(idx => createExplosionEffect(idx, '✨'));
+
+            let bonusScore = 0;
+            let timeAward = 2; // +2s default
+
+            actuallyCleared.forEach(idx => {
+                const tile = GAME.tiles[idx];
+                
+                if (tile.symbol === '🔑') {
+                    GAME.keyTileCleared = true;
+                    showToast("🔓 자물쇠 타일 잠금이 해제되었습니다!");
+                    GAME.tiles.forEach(t => {
+                        if (t.type === 'lock') {
+                            t.isLocked = false;
+                        }
+                    });
+                    renderTiles();
+                }
+
+                if (tile.type === 'bomb') {
+                    bonusScore += 500;
+                    timeAward += 2;
+                    triggerBombEffect(idx);
+                }
+
+                if (tile.type === 'lightning') {
+                    bonusScore += 500;
+                    timeAward += 2;
+                    triggerLightningEffect(idx);
+                }
+
+                if (tile.type === 'rainbow') {
+                    bonusScore += 800;
+                    timeAward += 3;
+                    triggerRainbowEffect(tile.symbol);
+                }
+
+                if (tile.type === 'gold') {
+                    bonusScore += 1000;
+                    GAME.gold += 15;
+                }
+            });
+
+            triggerCombo();
+
+            if (GAME.combo === 5) {
+                timeAward += 5;
+                showToast("✨ 5콤보 달성! 시간 보너스 +5초!");
+            } else if (GAME.combo === 10) {
+                timeAward += 10;
+                showToast("🔥 10콤보 폭발! 시간 보너스 +10초!");
+            } else if (GAME.combo === 20) {
+                timeAward += 15;
+                showToast("👑 20콤보 신화! 시간 보너스 +15초!");
+            }
+
+            GAME.timeLeft += timeAward;
+            if (GAME.timeLeft > GAME.maxTime) GAME.timeLeft = GAME.maxTime;
+
+            let comboMulti = 1;
+            if (GAME.combo >= 30) comboMulti = 5.0;
+            else if (GAME.combo >= 20) comboMulti = 3.0;
+            else if (GAME.combo >= 10) comboMulti = 2.0;
+            else if (GAME.combo >= 5) comboMulti = 1.5;
+
+            const upgComboBonus = (GAME.upgrades.combo - 1) * 0.05;
+            comboMulti += upgComboBonus;
+
+            if (GAME.isFever) {
+                comboMulti *= 2.0;
+            }
+
+            const baseEarn = 100 * actuallyCleared.length;
+            const totalEarn = Math.floor((baseEarn + bonusScore) * comboMulti);
+            GAME.score += totalEarn;
+
+            GAME.dailyMatchCount += actuallyCleared.length;
+            saveGameData();
+
+            if (GAME.combo >= 5) {
+                const container = document.getElementById('board-container');
+                container.classList.add('shake');
+                setTimeout(() => container.classList.remove('shake'), 300);
+            }
+
+            showScorePop(tileIndices[0], totalEarn);
+
+            const eventTriggerChance = 0.05 + (GAME.upgrades.rare - 1) * 0.02;
+            if (Math.random() < eventTriggerChance) {
+                triggerRandomEvent();
+            }
+
+            renderTiles();
+            updateHUD();
+
+            if (GAME.tiles.every(t => t.cleared)) {
+                handleStageClear();
+            } else {
+                checkSolvability();
+            }
+        }
+
+        function triggerBombEffect(centerIdx) {
+            SFX.playExplosion();
+            const r = Math.floor(centerIdx / GAME.gridSize);
+            const c = centerIdx % GAME.gridSize;
+
+            const targets = [];
+            for (let dr = -1; dr <= 1; dr++) {
+                for (let dc = -1; dc <= 1; dc++) {
+                    const nr = r + dr;
+                    const nc = c + dc;
+                    if (nr >= 0 && nr < GAME.gridSize && nc >= 0 && nc < GAME.gridSize) {
+                        const targetIdx = nr * GAME.gridSize + nc;
+                        if (!GAME.tiles[targetIdx].cleared) {
+                            targets.push(targetIdx);
+                        }
+                    }
+                }
+            }
+
+            targets.forEach(idx => {
+                GAME.tiles[idx].cleared = true;
+                createExplosionEffect(idx, '💥');
+            });
+        }
+
+        function triggerLightningEffect(centerIdx) {
+            SFX.playExplosion();
+            const r = Math.floor(centerIdx / GAME.gridSize);
+
+            for (let c = 0; c < GAME.gridSize; c++) {
+                const targetIdx = r * GAME.gridSize + c;
+                if (!GAME.tiles[targetIdx].cleared) {
+                    GAME.tiles[targetIdx].cleared = true;
+                    createExplosionEffect(targetIdx, '⚡');
+                }
+            }
+        }
+
+        function triggerRainbowEffect(matchSymbol) {
+            SFX.playExplosion();
+            GAME.tiles.forEach((tile, idx) => {
+                if (tile.symbol === matchSymbol && !tile.cleared) {
+                    tile.cleared = true;
+                    createExplosionEffect(idx, '✨');
+                }
+            });
+        }
+
+        function createExplosionEffect(idx, emojiSymbol) {
+            const container = document.getElementById('board-container');
+            const tileBtn = document.getElementById(`tile-${idx}`);
+            if (!tileBtn) return;
+
+            const rect = tileBtn.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+
+            for (let i = 0; i < 6; i++) {
+                const particle = document.createElement('div');
+                particle.className = "absolute text-xs pointer-events-none z-20 transition-all duration-500 ease-out";
+                particle.innerText = emojiSymbol;
+
+                const cx = rect.left - containerRect.left + rect.width / 2;
+                const cy = rect.top - containerRect.top + rect.height / 2;
+                particle.style.left = `${cx}px`;
+                particle.style.top = `${cy}px`;
+
+                container.appendChild(particle);
+
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 30 + Math.random() * 40;
+                const tx = Math.cos(angle) * dist;
+                const ty = Math.sin(angle) * dist;
+
+                requestAnimationFrame(() => {
+                    particle.style.transform = `translate(${tx}px, ${ty}px) scale(1.5)`;
+                    particle.style.opacity = '0';
+                });
+
+                setTimeout(() => particle.remove(), 600);
+            }
+        }
+
+        function showScorePop(idx, amount) {
+            const container = document.getElementById('board-container');
+            const tileBtn = document.getElementById(`tile-${idx}`);
+            if (!tileBtn) return;
+
+            const rect = tileBtn.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+
+            const pop = document.createElement('div');
+            pop.className = "absolute font-black text-amber-400 z-30 pointer-events-none transition-all duration-700 ease-out text-sm md:text-base";
+            pop.innerText = `+${amount}`;
+            
+            const cx = rect.left - containerRect.left + rect.width / 2;
+            const cy = rect.top - containerRect.top + rect.height / 2;
+            pop.style.left = `${cx}px`;
+            pop.style.top = `${cy}px`;
+
+            container.appendChild(pop);
+
+            requestAnimationFrame(() => {
+                pop.style.transform = `translateY(-30px) scale(1.3)`;
+                pop.style.opacity = '0';
+            });
+
+            setTimeout(() => pop.remove(), 700);
+        }
+
+        function showPenaltyPop(idx, seconds) {
+            const container = document.getElementById('board-container');
+            const tileBtn = document.getElementById(`tile-${idx}`);
+            if (!tileBtn) return;
+
+            const rect = tileBtn.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+
+            const pop = document.createElement('div');
+            pop.className = "absolute font-black text-red-500 z-40 pointer-events-none transition-all duration-700 ease-out text-lg md:text-xl drop-shadow-lg";
+            pop.innerText = `-${seconds}s ⚠️`;
+            
+            const cx = rect.left - containerRect.left + rect.width / 2;
+            const cy = rect.top - containerRect.top + rect.height / 2;
+            pop.style.left = `${cx}px`;
+            pop.style.top = `${cy}px`;
+
+            container.appendChild(pop);
+
+            requestAnimationFrame(() => {
+                pop.style.transform = `translateY(-40px) scale(1.4)`;
+                pop.style.opacity = '0';
+            });
+
+            setTimeout(() => pop.remove(), 850);
+        }
+
+        function triggerRandomEvent() {
+            const events = ['fever', 'goldrush', 'supershuffle'];
+            const roll = events[Math.floor(Math.random() * events.length)];
+
+            if (roll === 'fever') {
+                triggerFeverTime();
+            } else if (roll === 'goldrush') {
+                triggerGoldRush();
+            } else if (roll === 'supershuffle') {
+                triggerSuperShuffle();
+            }
+        }
+
+        function triggerFeverTime() {
+            SFX.playFever();
+            GAME.isFever = true;
+            GAME.feverTimeLeft = 15;
+            document.getElementById('fever-screen').classList.remove('hidden');
+            showToast("🔥 피버 타임! 점수 2배 / 타이머 정지!");
+
+            if (GAME.feverInterval) clearInterval(GAME.feverInterval);
+            GAME.feverInterval = setInterval(() => {
+                GAME.feverTimeLeft--;
+                if (GAME.feverTimeLeft <= 0) {
+                    clearInterval(GAME.feverInterval);
+                    GAME.isFever = false;
+                    document.getElementById('fever-screen').classList.add('hidden');
+                    showToast("피버 타임이 종료되었습니다.");
+                }
+            }, 1000);
+        }
+
+        function triggerGoldRush() {
+            SFX.playFever();
+            showToast("🪙 골드 러시! 황금 타일 대량 발견!");
+            GAME.tiles.forEach(tile => {
+                if (!tile.cleared && tile.type === 'normal') {
+                    if (Math.random() < 0.4) {
+                        tile.type = 'gold';
+                    }
+                }
+            });
+            renderTiles();
+        }
+
+        function triggerSuperShuffle() {
+            SFX.playFever();
+            showToast("🔄 슈퍼 셔플! 최적의 위치로 재배치!");
+            let uncleared = GAME.tiles.filter(t => !t.cleared);
+            uncleared = uncleared.sort((a, b) => a.symbol.localeCompare(b.symbol));
+            
+            let uIdx = 0;
+            GAME.tiles.forEach((tile, index) => {
+                if (!tile.cleared) {
+                    GAME.tiles[index] = uncleared[uIdx++];
+                }
+            });
+            renderTiles();
+        }
+
+        function useItem(type) {
+            SFX.init();
+            if (GAME.gameState !== 'playing') return;
+
+            if (GAME.inventory[type] <= 0) {
+                showToast("해당 아이템 수량이 부족합니다!");
+                return;
+            }
+
+            if (type === 'hint') {
+                const found = findValidMatch();
+                if (found) {
+                    GAME.inventory.hint--;
+                    document.getElementById('item-hint-qty').innerText = `${GAME.inventory.hint} / ${GAME.upgrades.hint + 2}`;
+                    found.forEach(idx => {
+                        const btn = document.getElementById(`tile-${idx}`);
+                        if (btn) btn.classList.add('ring-4', 'ring-emerald-400', 'animate-pulse');
+                    });
+                    setTimeout(() => {
+                        found.forEach(idx => {
+                            const btn = document.getElementById(`tile-${idx}`);
+                            if (btn) btn.classList.remove('ring-4', 'ring-emerald-400', 'animate-pulse');
+                        });
+                    }, 2000);
+                    SFX.playClick();
+                } else {
+                    showToast("맞출 수 있는 타일이 없습니다! 셔플을 사용하세요!");
+                }
+            } else if (type === 'shuffle') {
+                GAME.inventory.shuffle--;
+                document.getElementById('item-shuffle-qty').innerText = `${GAME.inventory.shuffle} / 2`;
+                shuffleRemaining();
+                SFX.playClick();
+                showToast("타일을 섞었습니다!");
+            } else if (type === 'time') {
+                GAME.inventory.time--;
+                document.getElementById('item-time-qty').innerText = `${GAME.inventory.time} / 1`;
+                GAME.timeLeft += 15;
+                if (GAME.timeLeft > GAME.maxTime) GAME.timeLeft = GAME.maxTime;
+                SFX.playMatch();
+                showToast("시간이 15초 연장되었습니다!");
+            } else if (type === 'autoremove') {
+                const found = findValidMatch();
+                if (found) {
+                    GAME.inventory.autoremove--;
+                    document.getElementById('item-autoremove-qty').innerText = `${GAME.inventory.autoremove} / 1`;
+                    handleSuccessMatch(found);
+                } else {
+                    showToast("제거할 짝이 없습니다!");
+                }
+            } else if (type === 'slow') {
+                GAME.inventory.slow--;
+                document.getElementById('item-slow-qty').innerText = `${GAME.inventory.slow} / 1`;
+                GAME.slowMoLeft = 10;
+                SFX.playMatch();
+                showToast("🐌 슬로우 모션 발동! 10초간 시간 감소 속도 절반!");
+            }
+
+            updateHUD();
+        }
+
+        function checkSolvability() {
+            if (GAME.gameState !== 'playing') return;
+
+            const hasActiveTiles = GAME.tiles.some(t => !t.cleared);
+            if (!hasActiveTiles) return; 
+
+            const match = findValidMatch();
+            if (!match) {
+                setTimeout(() => {
+                    shuffleRemaining();
+                    showToast("🔄 더 이상 매치할 그림이 없어 자동 셔플되었습니다!");
+                    SFX.playClick();
+                }, 600); 
+            }
+        }
+
+        function findValidMatch() {
+            const size = GAME.gridSize;
+            const requiredCount = GAME.activeMode === 'advanced' ? 3 : 2;
+
+            const groups = {};
+            GAME.tiles.forEach((t, i) => {
+                if (t.cleared) return;
+                if (t.isLocked && !GAME.keyTileCleared) return;
+
+                if (!groups[t.symbol]) groups[t.symbol] = [];
+                groups[t.symbol].push(i);
+            });
+
+            for (let symbol in groups) {
+                const indices = groups[symbol];
+                if (indices.length < requiredCount) continue;
+
+                if (GAME.activeMode === 'expert') {
+                    for (let a = 0; a < indices.length; a++) {
+                        for (let b = a + 1; b < indices.length; b++) {
+                            if (checkExpertPathSilently(indices[a], indices[b])) {
+                                return [indices[a], indices[b]];
+                            }
+                        }
+                    }
+                } else {
+                    return indices.slice(0, requiredCount);
+                }
+            }
+            return null;
+        }
+
+        function checkExpertPathSilently(idx1, idx2) {
+            const r1 = Math.floor(idx1 / GAME.gridSize);
+            const c1 = idx1 % GAME.gridSize;
+            const r2 = Math.floor(idx2 / GAME.gridSize);
+            const c2 = idx2 % GAME.gridSize;
+
+            const paddedRows = GAME.gridSize + 2;
+            const paddedCols = GAME.gridSize + 2;
+
+            const isBlocked = (r, c) => {
+                if (r < 0 || r >= paddedRows || c < 0 || c >= paddedCols) return true;
+                if (r === 0 || r === paddedRows - 1 || c === 0 || c === paddedCols - 1) return false;
+                
+                const origR = r - 1;
+                const origC = c - 1;
+                const origIdx = origR * GAME.gridSize + origC;
+
+                if (origR === r1 && origC === c1) return false;
+                if (origR === r2 && origC === c2) return false;
+
+                const tile = GAME.tiles[origIdx];
+                return tile && !tile.cleared;
+            };
+
+            const sr = r1 + 1, sc = c1 + 1;
+            const er = r2 + 1, ec = c2 + 1;
+
+            const queue = [];
+            const visited = Array.from({ length: paddedRows }, () => Array.from({ length: paddedCols }, () => [false, false, false, false]));
+
+            const dirs = [[-1, 0], [0, 1], [1, 0], [0, -1]];
+            for (let d = 0; d < 4; d++) {
+                const nr = sr + dirs[d][0];
+                const nc = sc + dirs[d][1];
+                if (!isBlocked(nr, nc)) {
+                    queue.push({ r: nr, c: nc, dir: d, turns: 0 });
+                    visited[nr][nc][d] = true;
+                }
+            }
+
+            while (queue.length > 0) {
+                const curr = queue.shift();
+
+                if (curr.r === er && curr.c === ec) {
+                    if (curr.turns <= 2) return true;
+                }
+
+                for (let d = 0; d < 4; d++) {
+                    const nr = curr.r + dirs[d][0];
+                    const nc = curr.c + dirs[d][1];
+                    
+                    if (nr >= 0 && nr < paddedRows && nc >= 0 && nc < paddedCols) {
+                        const newTurns = curr.dir === d ? curr.turns : curr.turns + 1;
+                        if (newTurns <= 2 && !isBlocked(nr, nc)) {
+                            if (!visited[nr][nc][d]) {
+                                visited[nr][nc][d] = true;
+                                queue.push({ r: nr, c: nc, dir: d, turns: newTurns });
+                            }
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        function shuffleRemaining() {
+            const uncleared = GAME.tiles.filter(t => !t.cleared);
+            if (uncleared.length === 0) return;
+
+            let attempts = 0;
+            let solved = false;
+
+            while (attempts < 100 && !solved) {
+                const shuffled = [...uncleared].sort(() => Math.random() - 0.5);
+                
+                let sIdx = 0;
+                GAME.tiles.forEach((tile, index) => {
+                    if (!tile.cleared) {
+                        GAME.tiles[index] = { ...shuffled[sIdx++] };
+                    }
+                });
+
+                if (GAME.activeMode !== 'expert' || findValidMatch() !== null) {
+                    solved = true;
+                }
+                attempts++;
+            }
+
+            GAME.selectedTiles = [];
+            renderTiles();
+        }
+
+        function triggerCombo() {
+            GAME.combo++;
+            GAME.comboExpires = Date.now() + 2000;
+
+            if (GAME.combo > GAME.highestComboAchieved) {
+                GAME.highestComboAchieved = GAME.combo;
+                if (GAME.highestComboAchieved >= 15) {
+                    GAME.gold += 100;
+                }
+                saveGameData();
+            }
+
+            SFX.playCombo(GAME.combo);
+        }
+
+        function startLoops() {
+            if (GAME.mainInterval) clearInterval(GAME.mainInterval);
+
+            GAME.mainInterval = setInterval(() => {
+                if (GAME.gameState !== 'playing') return;
+
+                if (GAME.combo > 0 && Date.now() > GAME.comboExpires) {
+                    GAME.combo = 0;
+                }
+
+                let timerSpeed = 1.0;
+                if (GAME.slowMoLeft > 0) {
+                    GAME.slowMoLeft -= 1.0;
+                    timerSpeed = 0.5;
+                }
+
+                if (!GAME.isFever) {
+                    const isBoss = GAME.stage % 10 === 0;
+                    const dynamicSpeedScale = 1.0 + (GAME.stage * 0.03); 
+                    const timerCost = (isBoss ? 1.5 : 1.0) * timerSpeed * dynamicSpeedScale;
+                    GAME.timeLeft -= timerCost;
+                }
+
+                if (GAME.timeLeft <= 12 && GAME.timeLeft > 0) {
+                    SFX.playTick();
+                    const timerEl = document.getElementById('game-timer');
+                    timerEl.classList.add('scale-110', 'text-red-600');
+                    setTimeout(() => timerEl.classList.remove('scale-110'), 150);
+                }
+
+                if (GAME.timeLeft <= 0) {
+                    GAME.timeLeft = 0;
+                    handleGameOver();
+                }
+
+                updateHUD();
+            }, 1000);
+        }
+
+        function updateHUD() {
+            document.getElementById('game-stage').innerText = `STAGE ${GAME.stage}`;
+            document.getElementById('game-score').innerText = GAME.score.toLocaleString();
+            document.getElementById('game-combo').innerText = GAME.combo;
+            document.getElementById('game-timer').innerText = Math.ceil(GAME.timeLeft);
+
+            const isBoss = GAME.stage % 10 === 0;
+            const barPercent = Math.min((GAME.timeLeft / GAME.maxTime) * 100, 100);
+            document.getElementById('timer-progress').style.width = `${barPercent}%`;
+
+            const tag = document.getElementById('game-mode-tag');
+            if (isBoss) {
+                tag.innerText = "🔥 보스 스테이지!";
+                tag.className = "text-[10px] font-bold bg-rose-600 text-white px-1.5 py-0.5 rounded animate-pulse";
+            } else if (GAME.activeMode === 'basic') {
+                tag.innerText = "기본 2매치";
+                tag.className = "text-[10px] font-bold bg-blue-600 text-white px-1.5 py-0.5 rounded";
+            } else if (GAME.activeMode === 'advanced') {
+                tag.innerText = "고급 3매치";
+                tag.className = "text-[10px] font-bold bg-amber-500 text-white px-1.5 py-0.5 rounded";
+            } else {
+                tag.innerText = "전문가 (사천성)";
+                tag.className = "text-[10px] font-bold bg-purple-600 text-white px-1.5 py-0.5 rounded";
+            }
+
+            let comboMulti = 1;
+            if (GAME.combo >= 30) comboMulti = 5.0;
+            else if (GAME.combo >= 20) comboMulti = 3.0;
+            else if (GAME.combo >= 10) comboMulti = 2.0;
+            else if (GAME.combo >= 5) comboMulti = 1.5;
+
+            const upgComboBonus = (GAME.upgrades.combo - 1) * 0.05;
+            comboMulti += upgComboBonus;
+
+            if (GAME.isFever) comboMulti *= 2.0;
+
+            document.getElementById('game-multiplier').innerText = `배수: x${comboMulti.toFixed(1)}`;
+
+            const tip = document.getElementById('game-status-tip');
+            if (GAME.slowMoLeft > 0) {
+                tip.innerText = `🐌 슬로우 모션 (${Math.ceil(GAME.slowMoLeft)}초)`;
+                tip.className = "text-xs text-sky-400 font-bold animate-pulse";
+            } else if (GAME.isFever) {
+                tip.innerText = `🔥 피버 타임! (${GAME.feverTimeLeft}초)`;
+                tip.className = "text-xs text-amber-400 font-bold animate-pulse";
+            } else {
+                tip.innerText = GAME.activeMode === 'expert' ? "연결 가능한 타일을 제거하세요!" : `${GAME.activeMode === 'advanced' ? '3개' : '2개'}의 타일을 찾으세요!`;
+                tip.className = "text-xs text-slate-400";
+            }
+        }
+
+        function handleStageClear() {
+            GAME.gameState = 'win';
+            clearInterval(GAME.mainInterval);
+            if (GAME.feverInterval) clearInterval(GAME.feverInterval);
+            SFX.playClear();
+
+            const baseGold = 20 + GAME.stage * 5;
+            const timeBonusGold = Math.floor(GAME.timeLeft * 0.5);
+            const totalGoldEarned = baseGold + timeBonusGold;
+
+            GAME.gold += totalGoldEarned;
+            if (GAME.score > GAME.highscore) {
+                GAME.highscore = GAME.score;
+            }
+
+            saveGameData();
+
+            document.getElementById('modal-icon').innerText = '🎉';
+            document.getElementById('modal-title').innerText = `스테이지 ${GAME.stage} 완료!`;
+            
+            const isBoss = GAME.stage % 10 === 0;
+
+            document.getElementById('modal-body').innerHTML = `
+                <div class="text-emerald-400 font-bold text-lg mb-2">${isBoss ? "👹 보스 격파 기념 추가 골드 지급!" : "성공적으로 클리어했습니다."}</div>
+                <div class="flex justify-between border-b border-slate-800 pb-1.5">
+                    <span>기본 획득 골드:</span>
+                    <span class="text-white font-semibold">🪙 ${baseGold}</span>
+                </div>
+                <div class="flex justify-between border-b border-slate-800 pb-1.5">
+                    <span>남은 시간 보너스:</span>
+                    <span class="text-white font-semibold">🪙 ${timeBonusGold}</span>
+                </div>
+                <div class="flex justify-between text-yellow-300 font-extrabold text-base mt-2">
+                    <span>최종 골드 합산:</span>
+                    <span>🪙 ${totalGoldEarned}</span>
+                </div>
+            `;
+
+            const actBtn = document.getElementById('modal-action-btn');
+            actBtn.innerText = "다음 스테이지";
+            actBtn.className = "w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-2xl transition shadow-lg shadow-indigo-900/40";
+            actBtn.onclick = () => {
+                document.getElementById('modal-overlay').classList.add('hidden');
+                GAME.stage++;
+                startGameFlow();
+            };
+
+            document.getElementById('modal-overlay').classList.remove('hidden');
+        }
+
+        function handleGameOver() {
+            GAME.gameState = 'gameover';
+            clearInterval(GAME.mainInterval);
+            if (GAME.feverInterval) clearInterval(GAME.feverInterval);
+            SFX.playGameOver();
+
+            if (GAME.score > GAME.highscore) {
+                GAME.highscore = GAME.score;
+            }
+            saveGameData();
+
+            document.getElementById('modal-icon').innerText = '💀';
+            document.getElementById('modal-title').innerText = "게임 오버";
+            document.getElementById('modal-body').innerHTML = `
+                <div class="text-rose-400 font-bold text-base mb-2">제한 시간이 초과되었습니다!</div>
+                <div class="space-y-1">
+                    <p class="text-xs">최종 도달 스테이지: <strong class="text-white">Stage ${GAME.stage}</strong></p>
+                    <p class="text-xs">최종 스코어: <strong class="text-white">${GAME.score.toLocaleString()}</strong></p>
+                </div>
+            `;
+
+            const actBtn = document.getElementById('modal-action-btn');
+            actBtn.innerText = "다시 도전하기";
+            actBtn.className = "w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-3 rounded-2xl transition shadow-lg shadow-rose-900/40";
+            actBtn.onclick = () => {
+                document.getElementById('modal-overlay').classList.add('hidden');
+                startCampaign();
+            };
+
+            document.getElementById('modal-overlay').classList.remove('hidden');
+        }
+
+        function exitToLobby(fromModal = false) {
+            SFX.playClick();
+            GAME.gameState = 'lobby';
+            clearInterval(GAME.mainInterval);
+            if (GAME.feverInterval) clearInterval(GAME.feverInterval);
+
+            if (fromModal) {
+                document.getElementById('modal-overlay').classList.add('hidden');
+            }
+
+            document.getElementById('lobby-screen').classList.remove('hidden');
+            refreshLobbyUI();
+        }
+
+        function showRuleTutorial(mode) {
+            GAME.gameState = 'tutorial';
+            clearInterval(GAME.mainInterval); // Safety pause
+
+            const titleEl = document.getElementById('tutorial-title');
+            const iconEl = document.getElementById('tutorial-icon');
+            const bodyEl = document.getElementById('tutorial-body');
+            const overlay = document.getElementById('tutorial-overlay');
+
+            if (mode === 'advanced') {
+                iconEl.innerText = "🧩";
+                titleEl.innerText = "규칙 변경: 고급 3매치 모드";
+                bodyEl.innerHTML = `
+                    <p class="font-bold text-amber-400 text-sm">⚠️ 이제부터 같은 그림 '3개'를 모아야 합니다!</p>
+                    <p class="text-xs text-slate-300">2개만 선택해서는 타일이 지워지지 않습니다. 한 세트(3개)의 위치를 확실히 파악하고 신중하게 연속해서 터치하세요!</p>
+                    <p class="text-[11px] text-rose-400 font-bold">💡 터치 실수 시 제한 시간이 대폭 감점(-3초)되니 매우 주의하세요!</p>
+                `;
+            } else if (mode === 'expert') {
+                iconEl.innerText = "🔗";
+                titleEl.innerText = "규칙 변경: 전문가 사천성 모드";
+                bodyEl.innerHTML = `
+                    <p class="font-bold text-purple-400 text-sm">⚠️ 네온 라인으로 연결되는 짝만 제거 가능!</p>
+                    <p class="text-xs text-slate-300">두 타일을 연결하는 가상의 라인이 <strong>2회 이하로 꺾여야</strong> 지울 수 있습니다. 중간에 다른 타일이 길을 막고 있으면 지울 수 없습니다!</p>
+                    <p class="text-[11px] text-emerald-400 font-bold">💡 화면 바깥쪽 빈 공간을 따라 흐르는 라인이나, 서로 바로 인접한 짝부터 공략해 보세요!</p>
+                `;
+            }
+
+            overlay.classList.remove('hidden');
+        }
+
+        function closeRuleTutorial() {
+            SFX.playClick();
+            const overlay = document.getElementById('tutorial-overlay');
+            overlay.classList.add('hidden');
+
+            if (GAME.stage === 6) {
+                GAME.shownTutorials.advanced = true;
+            } else if (GAME.stage === 16) {
+                GAME.shownTutorials.expert = true;
+            }
+
+            GAME.gameState = 'playing';
+            startLoops();
+        }
+
+        // --- Init Window Hooks ---
+        window.onload = function () {
+            loadGameData();
+            refreshLobbyUI();
+
+            document.body.addEventListener('click', () => {
+                SFX.init();
+            }, { once: true });
+        };
+    </script>
+</body>
+</html>
